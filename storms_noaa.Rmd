@@ -1,6 +1,6 @@
 ---
-title: "NOAA Storms"
-author: "Will Dearden"
+title: "Exploring the NOAA Storm database"
+author: "William Dearden"
 date: "May 17, 2017"
 output: html_document
 ---
@@ -9,22 +9,60 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## R Markdown
+## Data Summary
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+The data for this assignment come in the form of a comma-separated-value file compressed via the bzip2 algorithm to reduce its size. You can download the file from the course web site:
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+* [Storm Data](https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2) [47Mb]
 
-```{r cars}
-summary(cars)
+There is also some documentation of the database available. Here you will find how some of the variables are constructed/defined.
+
+* National Weather Service [Storm Data Documentation](https://d396qusza40orc.cloudfront.net/repdata%2Fpeer2_doc%2Fpd01016005curr.pdf)
+* National Climatic Data Center Storm Events [FAQ](https://d396qusza40orc.cloudfront.net/repdata%2Fpeer2_doc%2FNCDC%20Storm%20Events-FAQ%20Page.pdf)
+
+The events in the database start in the year 1950 and end in November 2011. In the earlier years of the database there are generally fewer events recorded, most likely due to a lack of good records. More recent years should be considered more complete.
+
+## Synopsis
+
+## Data Processing
+
+First, we load the packages necessary to complete this project:
+```{r packages, message=FALSE, warning=FALSE}
+
+library(ggplot2)
+library(magrittr)
+library(tidyverse)
+library(lubridate)
+library(forcats)
+library(scales)
+library(RColorBrewer)
+
 ```
 
-## Including Plots
-
-You can also embed plots, for example:
-
-```{r pressure, echo=FALSE}
-plot(pressure)
+Download, unzip and load data into a [tibble](https://cran.r-project.org/web/packages/tibble/vignettes/tibble.html) `storms`. 
+```{r raw_data, message = FALSE, cache = TRUE}
+storms <- read.csv("repdata%2Fdata%2FStormData.csv.bz2") %>% as_tibble()
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+Since there are `r storms %>% distinct(EVTYPE) %>% nrow()` types of storms in the dataset, we create a new variable `evtype_fctr` which lumps all but the 10 most common types of storms into `Other`.
+
+```{r factor, cache = TRUE, dependson="raw_data"}
+storms <- storms %>%
+    mutate(evtype_fctr = fct_lump(EVTYPE, n = 10))
+```
+
+```{r log_scale, cache = TRUE, dependson="factor"}
+storms <- storms %>%
+    mutate(log_propdmg = if_else(PROPDMG > 1, log(PROPDMG), 0)) %>%
+    mutate(censor_propdmg = if_else(PROPDMG > 1, PROPDMG, 1))
+```
+
+## Results
+
+```{r cache = TRUE, dependson="log_scale"}
+ggplot(storms, aes(x = censor_propdmg, color = evtype_fctr)) +
+    stat_ecdf() +
+    scale_x_log10(limits = c(1, 1000)) +
+    scale_y_continuous(limits = c(0.4, 1))
+```
+
