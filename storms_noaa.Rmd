@@ -62,7 +62,7 @@ storms <- storms %>%
 ```
 
 
-## Analysis
+## Results
 
 To measure storm impact, we simply sum up fatalities, injuries, and property damage by storm type.
 

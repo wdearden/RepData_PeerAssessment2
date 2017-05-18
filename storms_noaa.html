@@ -165,8 +165,8 @@ library(scales)</code></pre>
     filter(year &gt;= 2007) %&gt;%
     select(EVTYPE, year, FATALITIES, INJURIES, PROPDMG)</code></pre>
 </div>
-<div id="analysis" class="section level2">
-<h2>Analysis</h2>
+<div id="results" class="section level2">
+<h2>Results</h2>
 <p>To measure storm impact, we simply sum up fatalities, injuries, and property damage by storm type.</p>
 <pre class="r"><code>storms &lt;- storms %&gt;% group_by(EVTYPE) %&gt;% summarize_all(sum)</code></pre>
 <p>First, we graph the ten storm types with the largest number of fatalities:</p>
