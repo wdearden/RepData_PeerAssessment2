@@ -42,3 +42,5 @@ storms_propdmg <- storms %>%
     arrange(desc(PROPDMG)) %>%
     slice(1:10)
 
+ggplot(storms_fatal)
+

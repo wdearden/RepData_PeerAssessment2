@@ -24,6 +24,8 @@ The events in the database start in the year 1950 and end in November 2011. In t
 
 ## Synopsis
 
+In this report, we show that tornadoes are the most damaging type of storm in recent years. We do this by calculating the total number of fatalities, injuries, and property damage in the last five years and plotting which storms types cause the largest damage.
+
 ## Data Processing
 
 First, we load the packages necessary to complete this project:
@@ -32,6 +34,8 @@ First, we load the packages necessary to complete this project:
 library(ggplot2)
 library(magrittr)
 library(tidyverse)
+library(lubridate)
+library(scales)
 
 ```
 
@@ -40,25 +44,74 @@ Download, unzip and load data into a [tibble](https://cran.r-project.org/web/pac
 storms <- read.csv("repdata%2Fdata%2FStormData.csv.bz2") %>% as_tibble()
 ```
 
-Since there are `r storms %>% distinct(EVTYPE) %>% nrow()` types of storms in the dataset, we create a new variable `evtype_fctr` which lumps all but the 10 most common types of storms into `Other`.
+We show the benefit of piped data processing here because we can do all of our preprocessing in one easy to read group. First, we generate a `year` variable from the `BGN_DATE`. Then we scale `PROPDMG` depending on whether it is in the thousands, millions, or billions. We filter to the last five years, then we select some variables related to population health and economic damage.
 
-```{r factor, cache = TRUE, dependson="raw_data"}
+```{r cache = TRUE}
 storms <- storms %>%
-    mutate(evtype_fctr = fct_lump(EVTYPE, n = 10))
+    mutate(year = BGN_DATE %>% mdy_hms() %>% year()) %>%
+    mutate(PROPDMG =
+        case_when(
+            .$PROPDMGEXP == "K" ~ .$PROPDMG * 1000,
+            .$PROPDMGEXP == "M" ~ .$PROPDMG * 1000000,
+            .$PROPDMGEXP == "B" ~ .$PROPDMG * 1000000000,
+            TRUE ~ .$PROPDMG
+        )
+    ) %>%
+    filter(year >= 2007) %>%
+    select(EVTYPE, year, FATALITIES, INJURIES, PROPDMG)
 ```
 
-```{r log_scale, cache = TRUE, dependson="factor"}
-storms <- storms %>%
-    mutate(log_propdmg = if_else(PROPDMG > 1, log(PROPDMG), 0)) %>%
-    mutate(censor_propdmg = if_else(PROPDMG > 1, PROPDMG, 1))
+
+## Analysis
+
+To measure storm impact, we simply sum up fatalities, injuries, and property damage by storm type.
+
+```{r cache = TRUE}
+storms <- storms %>% group_by(EVTYPE) %>% summarize_all(sum)
 ```
 
-## Results
+First, we graph the ten storm types with the largest number of fatalities:
 
-```{r cache = TRUE, dependson="log_scale"}
-ggplot(storms, aes(x = censor_propdmg, color = evtype_fctr)) +
-    stat_ecdf() +
-    scale_x_log10(limits = c(10, 1000), oob = squish) +
-    scale_y_continuous(limits = c(0.6, 1))
+```{r}
+storms_fatalities <- storms %>%
+    arrange(desc(FATALITIES)) %>%
+    slice(1:10)
+ggplot(storms_fatalities, aes(EVTYPE %>% reorder(desc(FATALITIES)), FATALITIES)) +
+    geom_bar(stat = "identity") +
+    theme(axis.text.x = element_text(angle = 45, hjust=1)) +
+    labs(x = "Storm Type", y = "Fatalities", title = "Fatalities by Storm Type (2007-2011)")
 ```
 
+Tornadoes easily cause the largest number of fatalities by a scale of 3:1. Let's see if the same is true with injuries:
+
+```{r}
+storms_injuries <- storms %>%
+    arrange(desc(INJURIES)) %>%
+    slice(1:10)
+ggplot(storms_injuries, aes(EVTYPE %>% reorder(desc(INJURIES)), INJURIES)) +
+    geom_bar(stat = "identity") +
+    theme(axis.text.x = element_text(angle = 45, hjust=1)) +
+    labs(x = "Storm Type", y = "Injuries", title = "Injuries by Storm Type (2007-2011)")
+```
+
+Tornadoes also cause the largest number of injuries by a factor of 8:1.
+
+Finally, we graph the storms with the largest property damage:
+
+```{r}
+storms_propdmg <- storms %>%
+    arrange(desc(PROPDMG)) %>%
+    slice(1:10)
+ggplot(storms_propdmg, aes(EVTYPE %>% reorder(desc(PROPDMG)), PROPDMG)) +
+    geom_bar(stat = "identity") +
+    theme(axis.text.x = element_text(angle = 45, hjust=1)) +
+    labs(x = "Storm Type", y = "Property Damage (USD)", title = "Property Damage by Storm Type (2007-2011)") +
+    scale_y_continuous(label = unit_format(unit = "B", scale = 1e-9))
+```
+
+Again, tornadoes cause the largest amount of property damage, but floods are a close second. So, floods are less likely to cause physical harm but cause an disproportional amount of property damage.
+
+
+## Application
+
+This report can be used if you are deciding how much money to allocate to prepare for different types of storms in a long-term budget. This will tell you how damaging each storm type will be so you can allocate for research, emergency preparedness, etc. ahead of time. However, it is not appropriate for short-term planning. For example, if you know one tornado is coming and you want to plan a short-term emergency response, then you want the expected damage of one event. For that, we would present the mean damage by each type of storm. Or, we would develop a more sophisticated forecast of the damage of that storm.
